@@ -1,114 +1,95 @@
-import undetected_chromedriver as uc
 import time
 import random
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
+import zipfile
+import undetected_chromedriver as uc
 
-def create_undetected_driver():
-    """Undetected Chrome driver oluştur"""
+# ---------- Proxy ve User Agent Ayarları ----------
+ZYTE_API_KEY = "5df0e934e8f04dd398084f7c1d0db3dd"
+ZYTE_PROXY = "proxy.zyte.com"
+ZYTE_PORT = "8011"
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.97 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0"
+]
+
+# ---------- Proxy Kullanımı (True = Açık, False = Kapalı) ----------
+USE_PROXY = True  # 🔹 Proxy'yi kullanmak için True, kapatmak için False yap
+
+# ---------- Proxy Uzantısı Oluştur ----------
+def create_proxy_extension(proxy_host, proxy_port, proxy_user="", proxy_pass=""):
+    manifest_json = """
+    {
+        "version": "1.0.0",
+        "manifest_version": 2,
+        "name": "Chrome Proxy",
+        "permissions": ["proxy", "tabs", "unlimitedStorage", "storage", "<all_urls>", "webRequest", "webRequestBlocking"],
+        "background": {"scripts": ["background.js"]}
+    }
+    """
+    background_js = f"""
+    var config = {{
+        mode: "fixed_servers",
+        rules: {{
+            singleProxy: {{
+                scheme: "http",
+                host: "{proxy_host}",
+                port: parseInt({proxy_port})
+            }},
+            bypassList: ["localhost"]
+        }}
+    }};
+    chrome.proxy.settings.set({{value: config, scope: "regular"}}, function() {{}});
+
+    function callbackFn(details) {{
+        return {{authCredentials: {{username: "{proxy_user}", password: "{proxy_pass}"}}}};
+    }}
+
+    chrome.webRequest.onAuthRequired.addListener(callbackFn, {{urls: ["<all_urls>"]}}, ['blocking']);
+    """
+    with zipfile.ZipFile("proxy_auth.zip", "w") as zp:
+        zp.writestr("manifest.json", manifest_json)
+        zp.writestr("background.js", background_js)
+    return "proxy_auth.zip"
+
+# ---------- Selenium Driver Oluştur ----------
+def create_driver():
     options = uc.ChromeOptions()
-    
-    # Temel ayarlar
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    # Gerçek kullanıcı simülasyonu
     options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
     
-    try:
-        driver = uc.Chrome(options=options, version_main=None)
-        
-        # Rastgele viewport boyutu
-        sizes = [(1920, 1080), (1366, 768), (1536, 864)]
-        width, height = random.choice(sizes)
-        driver.set_window_size(width, height)
-        
-        print(f"✅ Undetected Chrome başlatıldı ({width}x{height})")
-        return driver
-        
-    except Exception as e:
-        print(f"❌ Undetected Chrome başlatılamadı: {e}")
-        return None
+    if USE_PROXY:
+        proxy_extension = create_proxy_extension(ZYTE_PROXY, ZYTE_PORT, ZYTE_API_KEY)
+        options.add_extension(proxy_extension)
+        print("🛡 Proxy etkinleştirildi")
+    else:
+        print("❌ Proxy kullanılmıyor")
 
-def human_behavior(driver):
-    """İnsan benzeri davranış"""
-    try:
-        # Rastgele mouse hareketleri
-        actions = ActionChains(driver)
-        for _ in range(random.randint(2, 4)):
-            x_offset = random.randint(-100, 100)
-            y_offset = random.randint(-100, 100)
-            actions.move_by_offset(x_offset, y_offset).perform()
-            time.sleep(random.uniform(0.5, 1.5))
-        
-        # Rastgele scroll
-        for _ in range(random.randint(1, 3)):
-            scroll_amount = random.randint(-300, 300)
-            driver.execute_script(f"window.scrollBy(0, {scroll_amount})")
-            time.sleep(random.uniform(1, 2))
-            
-    except Exception as e:
-        print(f"Davranış simülasyonu hatası: {e}")
+    driver = uc.Chrome(options=options)
+    return driver
 
-def main_undetected():
-    """Ana fonksiyon - Undetected Chrome"""
-    print("🔧 Undetected Chrome Driver ile deneme...")
-    
-    driver = create_undetected_driver()
-    if not driver:
-        return
+# ---------- Ana Fonksiyon ----------
+def main():
+    driver = create_driver()
     
     try:
-        urls = [
-            "https://www.sahibinden.com/",
-            "https://www.sahibinden.com/kategori/emlak",
-            "https://www.sahibinden.com/satilik-daire"
-        ]
+        driver.get("https://www.sahibinden.com")
+        print("✅ Ana sayfa açıldı")
+        time.sleep(random.uniform(3, 7))
         
-        for url in urls:
-            print(f"\n🎯 Deneniyor: {url}")
-            driver.get(url)
-            
-            # İnsan benzeri bekleme
-            time.sleep(random.uniform(3, 7))
-            
-            # İnsan davranışı simülasyonu
-            human_behavior(driver)
-            
-            # Sayfa başlığı kontrol
-            title = driver.title
-            print(f"📄 Başlık: {title}")
-            
-            if "Just a moment" not in title and "sahibinden" in driver.current_url:
-                print("✅ Başarıyla erişildi!!")
-                
-                # Kısa bir analiz
-                body_text = driver.find_element(By.TAG_NAME, "body").text
-                print(f"📊 Sayfa içerik uzunluğu: {len(body_text)} karakter")
-                
-                # İlan arama
-                try:
-                    listings = driver.find_elements(By.XPATH, "//a[contains(@href, '/ilan/')]")
-                    print(f"🏠 Bulunan ilan linki: {len(listings)} adet")
-                except:
-                    print("🔍 İlan araması yapılamadı")
-                
-                input("\n📝 İncelemek için Enter'a basın...")
-                break
-            else:
-                print("❌ Cloudflare bypass yapılamadı")
+        driver.get("https://www.sahibinden.com/satilik")
+        print("✅ Satılık sayfası açıldı")
+        time.sleep(random.uniform(3, 5))
         
-    except Exception as e:
-        print(f"💥 Hata: {e}")
+        page_html = driver.page_source
+        print("📄 Satılık sayfa HTML içeriği (ilk 5000 karakter):\n")
+        print(page_html[:5000])
     
     finally:
-        try:
-            driver.quit()
-        except:
-            pass
+        driver.quit()
+        print("🔒 Tarayıcı kapatıldı")
 
 if __name__ == "__main__":
-    main_undetected()
+    main()
