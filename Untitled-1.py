@@ -83,7 +83,7 @@ def main_undetected():
             print(f"📄 Başlık: {title}")
             
             if "Just a moment" not in title and "sahibinden" in driver.current_url:
-                print("✅ Başarıyla erişildi!")
+                print("✅ Başarıyla erişildi!!")
                 
                 # Kısa bir analiz
                 body_text = driver.find_element(By.TAG_NAME, "body").text
